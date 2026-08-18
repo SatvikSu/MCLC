@@ -28,9 +28,9 @@ class QuadEncoder:
         self._count = 0
         self._lock  = threading.Lock()
         self._last  = 0
-        # Config GPIO as an input pin with internal pull-up resistor
-        GPIO.setup(self.pin_a, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(self.pin_b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        # Config GPIO as an input pin
+        GPIO.setup(self.pin_a, GPIO.IN)
+        GPIO.setup(self.pin_b, GPIO.IN)
         a = GPIO.input(self.pin_a); b = GPIO.input(self.pin_b)
         self._last = (a << 1) | b # Bitwise left shift to capture current baseline edge
         # Adding event detection (interrupt) to detect edges for A and B
@@ -67,14 +67,22 @@ motoron.disable_command_timeout()
 
 ## CODE
 encoder = QuadEncoder(37, 38)
-motoron.set_speed(2,300)
+motoron.set_speed(2,-300)
+
 
 print_time = time.perf_counter()
-print_period = 0.5
-try:
-    while True:
-        if time.perf_counter() - print_time >= print_period:
-            print(f'Ticks: {encoder.read()}')
-except KeyboardInterrupt:
-    GPIO.cleanup()
-    motoron.set_speed(2,0)
+print_period = 0.25
+start_time = time.perf_counter()
+run_time = 5
+
+
+while time.perf_counter() - start_time < run_time:
+	if time.perf_counter() - print_time >= print_period:
+		print(f'Ticks: {encoder.read()}')
+		print_time = time.perf_counter()
+
+# time.sleep(run_time)
+print(f'Done. Ticks: {encoder.read()}')
+# problem to solve: ticks seem to be working with the time.sleep() method,
+# but when using the commented-out while loop, the ticks read are much smaller than expected. Why? TODO
+motoron.set_speed(2,0)
