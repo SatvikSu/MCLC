@@ -5,6 +5,7 @@
 
 import smbus
 import time
+import threading
 from motoron import MotoronI2C
 import sys
 import Jetson.GPIO as GPIO
@@ -67,3 +68,13 @@ motoron.disable_command_timeout()
 ## CODE
 encoder = QuadEncoder(37, 38)
 motoron.set_speed(2,300)
+
+print_time = time.perf_counter()
+print_period = 0.5
+try:
+    while True:
+        if time.perf_counter() - print_time >= print_period:
+            print(f'Ticks: {encoder.read()}')
+except KeyboardInterrupt:
+    GPIO.cleanup()
+    motoron.set_speed(2,0)
