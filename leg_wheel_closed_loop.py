@@ -3,6 +3,10 @@
 # steps to get to that:
 # 1) read encoder(s) with event detects intead of while True() and if(change) (aka do it properly)
 
+# 2) Program should find min and max range of legs, then it should 
+#    maintain wheel at a certain angular velocity and leg at a certain angle
+#    maybe for now, make legs follow wheels. worry about more complex stuff (other way?) later?
+
 import smbus
 import time
 import threading
@@ -53,6 +57,22 @@ class QuadEncoder:
         with self._lock:
             return self._count
 
+def get_leg_min():
+    stall_deg = 2.5 # degrees: if motor moves less than this amt after time.sleep(time), it has stalled
+    stall_time = 0.1 # seconds
+    # stall-detects the min degrees of leg
+    stall = False
+    motoron.set_speed(2, 250)
+    while not stall:
+        prev_counts = encoder.read()
+        time.sleep(stall_time)
+        counts = encoder.read()
+        degs = (counts - prev_counts) / (12 * 984.61) * 360
+        if degs < stall_deg:
+            stall = True
+            motoron.set_speed(2,0)
+    print('Done')
+
 ## SETUP
 # GPIO, multiplexer, and motor setup
 GPIO.setwarnings(False)
@@ -64,25 +84,6 @@ motoron.reinitialize()
 motoron.clear_reset_flag()
 motoron.disable_command_timeout()
 
-
-## CODE
+## CODE: stall detect
 encoder = QuadEncoder(37, 38)
-motoron.set_speed(2,-300)
-
-
-print_time = time.perf_counter()
-print_period = 0.25
-start_time = time.perf_counter()
-run_time = 5
-
-
-while time.perf_counter() - start_time < run_time:
-	if time.perf_counter() - print_time >= print_period:
-		print(f'Ticks: {encoder.read()}')
-		print_time = time.perf_counter()
-
-# time.sleep(run_time)
-print(f'Done. Ticks: {encoder.read()}')
-# problem to solve: ticks seem to be working with the time.sleep() method,
-# but when using the commented-out while loop, the ticks read are much smaller than expected. Why? TODO
-motoron.set_speed(2,0)
+get_leg_min()
