@@ -57,33 +57,41 @@ class QuadEncoder:
         with self._lock:
             return self._count
 
+############################################################################################################
+
 def get_leg_min():
-    stall_deg = 2.5 # degrees: if motor moves less than this amt after time.sleep(time), it has stalled
-    stall_time = 0.1 # seconds
-    # stall-detects the min degrees of leg
+    stall_deg = 2 # degrees: if motor moves less than this amt after time.sleep(time), it has stalled
+    stall_time = 0.05 # seconds
     stall = False
     motoron.set_speed(2, 250)
     while not stall:
         prev_counts = encoder.read()
         time.sleep(stall_time)
         counts = encoder.read()
-        degs = (counts - prev_counts) / (12 * 984.61) * 360
-        if degs < stall_deg:
+        degs = (counts - prev_counts) / (12 * 986.41) * 360
+        print(degs) # testing
+        if abs(degs) < stall_deg:
             stall = True
             motoron.set_speed(2,0)
     print('Done')
+    encoder._count = 0
+    # rotate the motors back a little bit
+    motoron.set_speed(2, -250)
+    time.sleep(2)
+    print(encoder.read()) # testing
+    motoron.set_speed(2,0)
 
 ## SETUP
 # GPIO, multiplexer, and motor setup
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BOARD) # Allows to call GPIO pins by their physical location #'s
 mux = smbus.SMBus(7)
-mux.write_byte(112, 1) # address 0x70, channel 0
+mux.write_byte(112, 0b10) # address 0x70, channel 1 for L_FR
 motoron = MotoronI2C(bus=7, address=16) # address 0x10 
 motoron.reinitialize()
 motoron.clear_reset_flag()
 motoron.disable_command_timeout()
 
 ## CODE: stall detect
-encoder = QuadEncoder(37, 38)
+encoder = QuadEncoder(31, 32)
 get_leg_min()
