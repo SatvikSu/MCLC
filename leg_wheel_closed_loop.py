@@ -1,11 +1,8 @@
-# evental goal: make wheels spin at a certain speed while legs maintain a certain angle to wheel
-
-# steps to get to that:
-# 1) read encoder(s) with event detects intead of while True() and if(change) (aka do it properly)
-
-# 2) Program should find min and max range of legs, then it should 
-#    maintain wheel at a certain angular velocity and leg at a certain angle
-#    maybe for now, make legs follow wheels. worry about more complex stuff (other way?) later?
+# Goal: drive robot on ground with front two wheels' legs out
+# Program should find min and max range of legs, then it should: 
+#    1) maintain wheel motor at a certain angular velocity
+#    2) maintain leg at a certain angle w.r.t. wheel 
+# leg angle = leg motor angle - wheel motor angle
 
 import smbus
 import time
@@ -13,6 +10,9 @@ import threading
 from motoron import MotoronI2C
 import sys
 import Jetson.GPIO as GPIO
+
+reference_wheel_omega = 90 # deg / sec
+reference_leg_theta = 90 # deg. should make this the midpoint after implementing max angle
 
 class QuadEncoder:
     # ------- Transition Table ---------
@@ -59,27 +59,54 @@ class QuadEncoder:
 
 ############################################################################################################
 
-def get_leg_min():
+def get_leg_bounds():
+
+    # find leg min
+
     stall_deg = 2 # degrees: if motor moves less than this amt after time.sleep(time), it has stalled
     stall_time = 0.05 # seconds
-    stall = False
+    stall_min = False
+    print('Finding leg min')
     motoron.set_speed(2, 250)
-    while not stall:
+    while not stall_min:
         prev_counts = encoder.read()
         time.sleep(stall_time)
         counts = encoder.read()
         degs = (counts - prev_counts) / (12 * 986.41) * 360
         print(degs) # testing
         if abs(degs) < stall_deg:
-            stall = True
+            stall_min = True
             motoron.set_speed(2,0)
-    print('Done')
     encoder._count = 0
+    print('Leg min determined, encoder count set to 0 here')
+    print('Rotating motor other way a bit')
     # rotate the motors back a little bit
     motoron.set_speed(2, -250)
     time.sleep(2)
-    print(encoder.read()) # testing
     motoron.set_speed(2,0)
+    time.sleep(2)
+
+    # find leg max
+    print('Finding leg max')
+    stall_max = False
+    motoron.set_speed(2,-250)
+    while not stall_max:
+        prev_counts = encoder.read()
+        time.sleep(stall_time)
+        counts = encoder.read()
+        degs = (counts - prev_counts) / (12 * 986.41) * 360
+        print (abs(degs)) # testing
+        if abs(degs) < stall_deg:
+            stall_max = True
+            motoron.set_speed(2,0)
+    max_degs = encoder.read() / (12*986.41) * 360
+    print(f'Leg max determined: {max_degs} degrees')
+    print('Rotating motor other way a bit')
+    motoron.set_speed(2,250)
+    time.sleep(2)
+    motoron.set_speed(0)
+    print('Done')
+
 
 ## SETUP
 # GPIO, multiplexer, and motor setup
@@ -94,4 +121,4 @@ motoron.disable_command_timeout()
 
 ## CODE: stall detect
 encoder = QuadEncoder(31, 32)
-get_leg_min()
+get_leg_bounds()
