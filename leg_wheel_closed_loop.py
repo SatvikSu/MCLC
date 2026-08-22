@@ -10,9 +10,12 @@ import threading
 from motoron import MotoronI2C
 import sys
 import Jetson.GPIO as GPIO
+from math import pi
 
 reference_wheel_omega = 90 # deg / sec
 reference_leg_theta = 90 # deg. should make this the midpoint after implementing max angle
+
+############################################################################################################
 
 class QuadEncoder:
     # ------- Transition Table ---------
@@ -57,9 +60,26 @@ class QuadEncoder:
         with self._lock:
             return self._count
 
+class VelEMA: 
+    def __init__(self, encoder, alpha=0.2):
+        self.enc = encoder
+        self.alpha = alpha # low alpha -> low filtering
+        self.prev_rad = encoder.read() * (2*pi/12) / 986.41
+        self.prev_t = time.perf_counter()
+        self.ema = 0.0
+
+    def update(self):
+        now = time.perf_counter()
+        theta  = self.enc.read() * (2*pi/12) / 986.41 # Gets current angular position
+        dt  = max(1e-4, now - self.prev_t)
+        rps = (theta - self.prev_rad) / dt # Radians per second (CONVERT TO COUNTS PER CM IN OUTPUT)
+        self.ema = self.alpha * rps + (1 - self.alpha) * self.ema
+        self.prev_rad, self.prev_t = theta, now
+        return self.ema
+
 ############################################################################################################
 
-def get_leg_bounds():
+def get_leg_bounds(encoder):
 
     # find leg min
 
@@ -77,7 +97,7 @@ def get_leg_bounds():
         if abs(degs) < stall_deg:
             stall_min = True
             motoron.set_speed(2,0)
-    encoder._count = 0
+    L_FR_encoder._count = 0
     print('Leg min determined, encoder count set to 0 here')
     print('Rotating motor other way a bit')
     # rotate the motors back a little bit
@@ -107,6 +127,13 @@ def get_leg_bounds():
     motoron.set_speed(0)
     print('Done')
 
+def set_speed_wfr(speed):
+    mux.write_byte(112, 0b1)
+    motoron.set_speed(2,speed)
+
+def set_speed_lfr(speed):
+    mux.write_byte(112, 0b10)
+    motoron.set_speed(2,speed)
 
 ## SETUP
 # GPIO, multiplexer, and motor setup
@@ -120,5 +147,23 @@ motoron.clear_reset_flag()
 motoron.disable_command_timeout()
 
 ## CODE: stall detect
-encoder = QuadEncoder(31, 32)
-get_leg_bounds()
+L_FR_encoder = QuadEncoder(31, 32)
+W_FR_encoder = QuadEncoder(37, 38)
+L_FR_VelEMA = VelEMA(L_FR_encoder)
+W_FR_VelEMA = VelEMA(W_FR_encoder)
+
+get_leg_bounds(L_FR_encoder)
+time.sleep(5)
+
+## closed-loop control of both leg and wheel motors' velocities
+reference_omega_deg_per_sec = int(sys.argv[1])
+Kp = 8 # Kp going from omega (deg/sec) to motor speed command (from -800 to 800). For motor voltage = 12 V
+Ki = 2 # Ki going from omega (deg/sec) * time (sec) to motor speed command (from -800 to 800). For motor voltage = 12 V
+
+try:
+    set_speed_wfr(300)
+    set_speed_lfr(-300)        
+except KeyboardInterrupt:
+    print('Interrupted')
+    set_speed_wfr(0)
+    set_speed_lfr(0)
