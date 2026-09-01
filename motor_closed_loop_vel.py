@@ -19,7 +19,7 @@ Ki = 2 # Ki going from omega (deg/sec) * time (sec) to motor speed command (from
 # make multiplexer and Motoron motor controller objects
 mux = smbus.SMBus(7)
 motoron = MotoronI2C(bus=7, address=16) # address 0x10 
-mux.write_byte(112, 1) # address 0x70, channel 0
+mux.write_byte(112, 0b1) # address 0x70, channel 7
 motoron.reinitialize()
 motoron.clear_reset_flag()
 motoron.disable_command_timeout()
@@ -60,53 +60,3 @@ while True:
      if time.perf_counter() - print_time >= 0.25:
           print(f'Reference omega (deg/s): {reference_omega_deg_per_sec}, Actual omega (deg/s): {omega_deg_per_sec}, Speed set to: {speed}')
           print_time = time.perf_counter()
-
-'''
-# to test if it doesn't turn at a constant rate microscopically: 
-# calc velocity every time ticks change and print every so often
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(37, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-enc_a_change_count = 0
-outer_revs_count = 0
-old_outer_revs_count = 0
-omega_deg_per_sec = 0
-prev_enc_a = GPIO.input(37)
-old_time = time.perf_counter()
-print_time = time.perf_counter()
-while True:     
-     enc_a = GPIO.input(37)
-     if enc_a != prev_enc_a:
-          enc_a_change_count += 1
-          quad_counts = enc_a_change_count * 2
-          inner_revs_count = quad_counts / 12
-          outer_revs_count = inner_revs_count / 986.41
-          prev_enc_a = enc_a
-          curr_time = time.perf_counter()  
-          delta_t = curr_time - old_time
-          omega_rev_per_sec = (outer_revs_count - old_outer_revs_count) / delta_t
-          omega_deg_per_sec = omega_rev_per_sec * 360
-          old_time = curr_time
-          old_outer_revs_count = outer_revs_count
-     if time.perf_counter() - print_time > 0.25:
-          print(f'Angular velocity (deg/s) : {omega_deg_per_sec}')
-          print_time = time.perf_counter()
-'''
-
-'''
-# graph commanded motor speed     
-speeds = []
-times = []
-time = 0
-while True:
-     speeds.append(speed)
-     speeds = speeds[-20:]
-     times.append(time)
-     times = times[-20:]
-     plt.clf()
-     plt.scatter(times, speeds)
-     plt.xlabel('Time (s)')
-     plt.ylabel('Speed')
-     plt.title('Motor Speed Over Time')
-     plt.pause(1)
-     time += 1
-'''

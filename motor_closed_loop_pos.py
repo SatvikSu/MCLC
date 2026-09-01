@@ -1,4 +1,5 @@
 # USAGE: python motor_closed_loop_pos.py <theta in degrees>
+# run front right wheel motor (channel 0, port 2, encoder pin a is 37, encoder pin b is 38)
 
 import smbus
 import time

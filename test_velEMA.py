@@ -199,11 +199,13 @@ class Axis:
         self.max = extend
 
 def main():
-    W_FR_motor = Axis('W_FR', ch=0, port=2, enc_sign=-1, speed_max=800)
+    W_FR_motor = Axis('W_FR', mux_ch=0, port=2, enc_sign=-1, speed_max=800, vel_alpha = 1)
     W_FR_motor.set_speed(200)
-    for _ in range(10):
-        print(W_FR_motor.get_vel())
+    for _ in range(20):
+        print(f'Velocity: {W_FR_motor.get_vel() * 180 / pi} deg/s')
         time.sleep(0.5)
+    W_FR_motor.set_speed(0)
+    GPIO.cleanup()
 
 if __name__ == '__main__':
     main()

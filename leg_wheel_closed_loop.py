@@ -10,9 +10,12 @@ import threading
 from motoron import MotoronI2C
 import sys
 import Jetson.GPIO as GPIO
+from math import pi
 
 reference_wheel_omega = 90 # deg / sec
 reference_leg_theta = 90 # deg. should make this the midpoint after implementing max angle
+
+############################################################################################################
 
 class QuadEncoder:
     # ------- Transition Table ---------
@@ -57,9 +60,26 @@ class QuadEncoder:
         with self._lock:
             return self._count
 
+class VelEMA: 
+    def __init__(self, encoder, alpha=0.2):
+        self.enc = encoder
+        self.alpha = alpha # low alpha -> low filtering
+        self.prev_rad = encoder.read() * (2*pi/12) / 986.41
+        self.prev_t = time.perf_counter()
+        self.ema = 0.0
+
+    def update(self):
+        now = time.perf_counter()
+        theta  = self.enc.read() * (2*pi/12) / 986.41 # Gets current angular position
+        dt  = max(1e-4, now - self.prev_t)
+        rps = (theta - self.prev_rad) / dt # Radians per second (CONVERT TO COUNTS PER CM IN OUTPUT)
+        self.ema = self.alpha * rps + (1 - self.alpha) * self.ema
+        self.prev_rad, self.prev_t = theta, now
+        return self.ema
+
 ############################################################################################################
 
-def get_leg_bounds():
+def get_leg_bounds(encoder):
 
     # find leg min
 
@@ -67,7 +87,7 @@ def get_leg_bounds():
     stall_time = 0.05 # seconds
     stall_min = False
     print('Finding leg min')
-    motoron.set_speed(2, 250)
+    motoron.set_speed(1, 250)
     while not stall_min:
         prev_counts = encoder.read()
         time.sleep(stall_time)
@@ -76,20 +96,14 @@ def get_leg_bounds():
         print(degs) # testing
         if abs(degs) < stall_deg:
             stall_min = True
-            motoron.set_speed(2,0)
-    encoder._count = 0
+            motoron.set_speed(1,0)
+    L_FL_encoder._count = 0
     print('Leg min determined, encoder count set to 0 here')
-    print('Rotating motor other way a bit')
-    # rotate the motors back a little bit
-    motoron.set_speed(2, -250)
-    time.sleep(2)
-    motoron.set_speed(2,0)
-    time.sleep(2)
 
     # find leg max
     print('Finding leg max')
     stall_max = False
-    motoron.set_speed(2,-250)
+    motoron.set_speed(1,-250)
     while not stall_max:
         prev_counts = encoder.read()
         time.sleep(stall_time)
@@ -98,27 +112,48 @@ def get_leg_bounds():
         print (abs(degs)) # testing
         if abs(degs) < stall_deg:
             stall_max = True
-            motoron.set_speed(2,0)
+            motoron.set_speed(1,0)
     max_degs = encoder.read() / (12*986.41) * 360
     print(f'Leg max determined: {max_degs} degrees')
     print('Rotating motor other way a bit')
-    motoron.set_speed(2,250)
+    motoron.set_speed(1,250)
     time.sleep(2)
-    motoron.set_speed(0)
+    motoron.set_speed(1, 0)
     print('Done')
 
+def set_speed_wfr(speed):
+    mux.write_byte(112, 0b1)
+    motoron.set_speed(1,speed)
+
+def set_speed_lfl(speed):
+    mux.write_byte(112, 0b10)
+    motoron.set_speed(1,speed)
 
 ## SETUP
 # GPIO, multiplexer, and motor setup
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BOARD) # Allows to call GPIO pins by their physical location #'s
 mux = smbus.SMBus(7)
-mux.write_byte(112, 0b10) # address 0x70, channel 1 for L_FR
+mux.write_byte(112, 0b10) # address 0x70, channel 1 for L_FL
 motoron = MotoronI2C(bus=7, address=16) # address 0x10 
 motoron.reinitialize()
 motoron.clear_reset_flag()
 motoron.disable_command_timeout()
 
 ## CODE: stall detect
-encoder = QuadEncoder(31, 32)
-get_leg_bounds()
+L_FL_encoder = QuadEncoder(23, 24)
+#W_FR_encoder = QuadEncoder(37, 38)
+L_FL_VelEMA = VelEMA(L_FL_encoder)
+#W_FR_VelEMA = VelEMA(W_FR_encoder)
+
+get_leg_bounds(L_FL_encoder)
+time.sleep(5)
+
+## closed-loop control of both leg and wheel motors' velocities
+# reference_omega_deg_per_sec = int(sys.argv[1])
+#reference_omega_deg_per_sec = 90
+#Kp = 8 # Kp going from omega (deg/sec) to motor speed command (from -800 to 800). For motor voltage = 12 V
+#Ki = 2 # Ki going from omega (deg/sec) * time (sec) to motor speed command (from -800 to 800). For motor voltage = 12 V
+
+#set_speed_wfr(300)
+#set_speed_lfr(-300)        
