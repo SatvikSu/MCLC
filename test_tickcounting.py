@@ -16,6 +16,7 @@ motoron.clear_reset_flag()
 motoron.disable_command_timeout()
 GPIO.setmode(GPIO.BOARD)
 GPIO.setup(37, GPIO.IN)
+GPIO.setup(38, GPIO.IN)
 
 outer_revs_count = 0
 
@@ -27,7 +28,7 @@ def main():
      motoron.set_speed(2, 400)
      print('Going 10 revs')
 
-     while outer_revs_count < 10:
+     while abs(outer_revs_count) < 10:
           print(f'Revs: {outer_revs_count}')
           time.sleep(0.01)
           
@@ -36,18 +37,26 @@ def main():
      GPIO.cleanup()
 
 
-def read_ticks():
-     enc_a_change_count = 0     
-     prev_enc_a = GPIO.input(37)
+def read_ticks():     
+     prev_a = GPIO.input(37)
      while True:     
-          enc_a = GPIO.input(37)
-          if enc_a != prev_enc_a:
-               enc_a_change_count += 1
-               quad_counts = enc_a_change_count * 2
-               inner_revs_count = quad_counts / 12
+          a = GPIO.input(37)
+          b = GPIO.input(38)
+          delta = 0
+          if a != prev_a:
+               if a == 0:
+                    if b == 1:
+                         delta = -2
+                    elif b == 0:
+                         delta = 2
+               elif a == 1:
+                    if b == 0:
+                         delta = -2
+                    elif b == 1:
+                         delta = 2
                global outer_revs_count
-               outer_revs_count = inner_revs_count / 986.41
-               prev_enc_a = enc_a
+               outer_revs_count += delta / 12 / 986.41
+               prev_a = a
      
 
 if __name__ == '__main__':
