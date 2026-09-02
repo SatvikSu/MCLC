@@ -97,17 +97,18 @@ class QuadEncoder:
         self.pin_b = pin_b
         self.sign = 1 if sign >= 0 else -1
         self._count = 0
-        self._lock  = threading.Lock()
+        #self._lock  = threading.Lock()
         # Config GPIO as an input pin
         GPIO.setup(self.pin_a, GPIO.IN)
         GPIO.setup(self.pin_b, GPIO.IN)
         # Adding event detection (interrupt) to detect edges for A 
-        GPIO.add_event_detect(self.pin_a, GPIO.BOTH, callback=self._edge, bouncetime=0)
+        GPIO.add_event_detect(self.pin_a, GPIO.RISING, callback=self._edge, bouncetime=0) # GPIO.BOTH
         
     # Method to detect the new state of A and B channels
-    def _edge(self, _):
+    def _edge(self, _): # did 10.25 in 10 with only a rising
         a = GPIO.input(self.pin_a); b = GPIO.input(self.pin_b)
         delta = 0
+        '''
         if a == 0:
             if b == 1:
                 delta = -2
@@ -118,12 +119,16 @@ class QuadEncoder:
                 delta = -2
             elif b == 1:
                 delta = 2
+        '''
+        if b == 1:
+            delta = 4
+        elif b == 0:
+            delta = -4
         self._count += delta * self.sign
 
     # Method to read the current tick count # CONVERT TO ROTATIONAL (rad or deg)
     def read(self):
-        with self._lock:
-            return self._count
+        return self._count
 
 
 # ---------- VELOCITY ---------------
@@ -254,10 +259,13 @@ def main():
 
     num_revs = 10
 
-    axes['W_FR'].set_speed(200)
+    axes['W_FR'].set_speed(400)
     print(f'Going {num_revs} revs')
-    while axes['W_FR'].get_pos() < num_revs * 2 * pi:
-        time.sleep(0.1)
+    pos_deg = axes['W_FR'].get_pos() * 180 / pi 
+    while pos_deg < num_revs * 360:
+        time.sleep(0.01)
+        pos_deg = axes['W_FR'].get_pos() * 180 / pi
+        
     axes['W_FR'].set_speed(0)
     print(f'Went {num_revs} revs')
 
