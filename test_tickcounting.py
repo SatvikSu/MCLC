@@ -39,25 +39,38 @@ def main():
 
 def read_ticks():     
      prev_a = GPIO.input(37)
+     prev_b = GPIO.input(38)
      while True:     
           a = GPIO.input(37)
           b = GPIO.input(38)
-          delta = 0
-          if a != prev_a:
-               if a == 0:
-                    if b == 1:
-                         delta = -2
-                    elif b == 0:
-                         delta = 2
-               elif a == 1:
+          if a != prev_a or b != prev_b:
+               delta = 0
+               if a != prev_a:
+                    if a == 0:
+                         if b == 1:
+                              delta = -1
+                         elif b == 0:
+                              delta = 1
+                    elif a == 1:
+                         if b == 0:
+                              delta = -1
+                         elif b == 1:
+                              delta = 1
+                    
+               elif b != prev_b:
                     if b == 0:
-                         delta = -2
+                         if a == 0:
+                              delta = -1
+                         elif a == 1:
+                              delta = 1
                     elif b == 1:
-                         delta = 2
+                         if a == 1:
+                              delta = -1
+                         elif a == 0:
+                              delta = 1
                global outer_revs_count
                outer_revs_count += delta / 12 / 986.41
                prev_a = a
-     
 
 if __name__ == '__main__':
      main()
